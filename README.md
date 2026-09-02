@@ -2,7 +2,7 @@
 
 Удобная WPF-оболочка для [zapret-discord-youtube](https://github.com/Flowseal/zapret-discord-youtube). Приложение автоматизирует скачивание, установку и управление профилями утилиты `zapret`, обеспечивая быстрое восстановление доступа к заблокированным сервисам (YouTube, Discord и др.) в нативном интерфейсе Windows.
 
-Версия: **1.0.1** | Платформа: **Windows 10/11 x64** | Требуется **.NET 10**
+Версия: **1.0.2** | Платформа: **Windows 10/11 x64** | Требуется **.NET 10**
 
 ## Возможности
 
@@ -42,10 +42,10 @@ src/
 dotnet build AntiZapretDPI.slnx -c Release
 
 # Сборка установщика с указанием версии (Inno Setup в PATH или Program Files)
-src\AntiZapretDPI.Installer\build-installer.bat 1.0.1
+src\AntiZapretDPI.Installer\build-installer.bat 1.0.2
 ```
 
-Готовый установщик появится в `dist\AntiZapretDPI-Setup-1.0.1.exe`.
+Готовый установщик появится в `dist\AntiZapretDPI-Setup-1.0.2.exe`.
 
 ## Тихая установка и удаление
 
@@ -53,7 +53,7 @@ src\AntiZapretDPI.Installer\build-installer.bat 1.0.1
 
 ```powershell
 # Установка
-AntiZapretDPI-Setup-1.0.1.exe /VERYSILENT /SUPPRESSMSGBOXES /NORESTART
+AntiZapretDPI-Setup-1.0.2.exe /VERYSILENT /SUPPRESSMSGBOXES /NORESTART
 
 # Удаление
 "C:\Program Files\AntiZapretDPI\Uninstall.exe" /VERYSILENT /SUPPRESSMSGBOXES

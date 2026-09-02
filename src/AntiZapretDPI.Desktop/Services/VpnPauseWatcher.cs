@@ -10,15 +10,18 @@ namespace AntiZapretDPI.Services
         private readonly IAntiZapretManager _manager;
         private readonly AppSettingsService _settingsService;
         private readonly IVpnDetector _vpnDetector;
+        private readonly IStrategyAutoSelector _autoSelector;
 
         public VpnPauseWatcher(
             IAntiZapretManager manager,
             AppSettingsService settingsService,
-            IVpnDetector vpnDetector)
+            IVpnDetector vpnDetector,
+            IStrategyAutoSelector autoSelector)
         {
             _manager = manager;
             _settingsService = settingsService;
             _vpnDetector = vpnDetector;
+            _autoSelector = autoSelector;
         }
 
         public async Task RunAsync()
@@ -61,9 +64,49 @@ namespace AntiZapretDPI.Services
                 }
                 else if (!running)
                 {
-                    _manager.StartZapret(out _, settings.SelectedStrategy ?? "general.bat", settings.HiddenMode);
+                    if (settings.AutoSelectStrategy && settings.AutoSelectPending)
+                    {
+                        await StartWithAutoSelectAsync(settings);
+                    }
+                    else
+                    {
+                        _manager.StartZapret(out _, settings.SelectedStrategy ?? "general.bat", settings.HiddenMode);
+                    }
                 }
             }
+        }
+
+        private async Task StartWithAutoSelectAsync(AppSettings settings)
+        {
+            var profiles = _manager.GetAvailablePresets();
+
+            if (profiles.Count == 0)
+            {
+                settings.AutoSelectPending = false;
+                _settingsService.Save(settings);
+                _manager.StartZapret(out _, settings.SelectedStrategy ?? "general.bat", settings.HiddenMode);
+                return;
+            }
+
+            var outcome = await _autoSelector.TrySelectAsync(
+                profiles,
+                settings.SelectedStrategy ?? "general.bat",
+                settings.HiddenMode);
+
+            if (outcome.IsSuccess)
+            {
+                settings.SelectedStrategy = outcome.Profile;
+            }
+
+            settings.AutoSelectPending = false;
+            _settingsService.Save(settings);
+
+            if (outcome.IsSuccess)
+            {
+                return;
+            }
+
+            _manager.StartZapret(out _, settings.SelectedStrategy ?? "general.bat", settings.HiddenMode);
         }
     }
 }

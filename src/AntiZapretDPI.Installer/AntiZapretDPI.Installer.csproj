@@ -17,7 +17,7 @@
   </ItemGroup>
 
   <PropertyGroup>
-    <InstallerVersion Condition="'$(InstallerVersion)' == ''">1.0.1</InstallerVersion>
+    <InstallerVersion Condition="'$(InstallerVersion)' == ''">1.0.2</InstallerVersion>
     <RepoRoot>$(MSBuildProjectDirectory)\..\..</RepoRoot>
     <PublishDir>$(RepoRoot)\artifacts\publish</PublishDir>
     <DistDir>$(RepoRoot)\dist</DistDir>

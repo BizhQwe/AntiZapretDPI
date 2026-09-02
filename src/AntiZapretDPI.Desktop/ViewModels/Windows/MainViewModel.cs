@@ -34,6 +34,7 @@ namespace AntiZapretDPI.ViewModels.Windows
 
         private CancellationTokenSource? _autoSelectCts;
         private bool _autoSelectActive;
+        private bool _autoSelectPending;
         private bool _isVpnPaused;
 
         [ObservableProperty] private string _version = "Версия не найдена";
@@ -87,6 +88,7 @@ namespace AntiZapretDPI.ViewModels.Windows
             _machine.StateChanged += OnStateChanged;
 
             LoadSettings();
+            ReconcileAutoStartTask();
             SyncWithServiceState();
             UpdateUiState();
 
@@ -151,7 +153,8 @@ namespace AntiZapretDPI.ViewModels.Windows
 
             if (managedByVpnPause)
             {
-                if (_machine.CurrentState is not RunningState)
+                bool wasRunningState = _machine.CurrentState is RunningState;
+                if (!wasRunningState)
                 {
                     _machine.MoveTo<RunningState>();
                 }
@@ -160,9 +163,10 @@ namespace AntiZapretDPI.ViewModels.Windows
 
                 if (running)
                 {
-                    if (_isVpnPaused)
+                    if (!wasRunningState || _isVpnPaused)
                     {
                         StatusText = "Сервис запущен";
+                        ReloadStrategyFromDisk();
                     }
                     StatusColor = Brushes.LimeGreen;
                     _isVpnPaused = false;
@@ -210,6 +214,24 @@ namespace AntiZapretDPI.ViewModels.Windows
                 return;
             }
 
+            // VPN уже активен: не подбираем стратегию и не запускаем сервис сейчас —
+            // пробы через VPN бессмысленны. Уходим в обычное состояние VPN-паузы,
+            // а подбор выполнит watcher после выключения VPN.
+            if (IsPauseOnVpn && _vpnDetector.IsVpnActive())
+            {
+                _autoSelectPending = IsAutoSelectStrategy;
+                SaveSettings();
+
+                _vpnPauseCoordinator.EnsureStarted();
+                for (int i = 0; i < 20 && !_vpnPauseCoordinator.IsRunning; i++)
+                {
+                    await Task.Delay(100);
+                }
+
+                SyncWithServiceState();
+                return;
+            }
+
             _machine.MoveTo<BusyState>();
 
             bool ok;
@@ -238,6 +260,9 @@ namespace AntiZapretDPI.ViewModels.Windows
 
             if (ok)
             {
+                _autoSelectPending = false;
+                SaveSettings();
+
                 _machine.MoveTo<RunningState>();
                 _vpnPauseCoordinator.EnsureStarted();
             }
@@ -333,6 +358,8 @@ namespace AntiZapretDPI.ViewModels.Windows
                 _vpnPauseCoordinator.EnsureStopped(5000);
                 _manager.StopZapret();
             });
+            _autoSelectPending = false;
+            SaveSettings();
             _machine.MoveTo<IdleState>();
             StatusText = "Остановлен";
         }
@@ -516,8 +543,58 @@ namespace AntiZapretDPI.ViewModels.Windows
             IsAutoUpdateEnabled = settings.AutoUpdate;
             IsAutoStartEnabled = settings.AutoStart;
             IsAutoSelectStrategy = settings.AutoSelectStrategy;
+            _autoSelectPending = settings.AutoSelectPending;
             IsPauseOnVpn = settings.PauseOnVpn;
             SelectedStrategy = settings.SelectedStrategy;
+        }
+
+        // Watcher (отдельный процесс) после выключения VPN мог сам подобрать
+        // профиль и записать его в settings.json. Подхватываем результат,
+        // чтобы комбобокс и флаг отложенного подбора совпадали с диском.
+        private void ReloadStrategyFromDisk()
+        {
+            try
+            {
+                var settings = _settingsService.Load();
+                _autoSelectPending = settings.AutoSelectPending;
+
+                string? profile = settings.SelectedStrategy;
+                if (!string.IsNullOrEmpty(profile)
+                    && Strategies.Contains(profile)
+                    && !string.Equals(profile, SelectedStrategy, StringComparison.OrdinalIgnoreCase))
+                {
+                    SelectedStrategy = profile;
+                }
+            }
+            catch
+            {
+            }
+        }
+
+        // Приводит задачу Планировщика в соответствие с сохранённой настройкой
+        // при каждом запуске приложения, чтобы автозапуск работал даже без
+        // повторного переключения тумблера (например, после чисток Windows).
+        // Перерегистрация при включённой настройке также перезаписывает старые
+        // задачи, созданные с ограничениями по питанию от батареи.
+        private void ReconcileAutoStartTask()
+        {
+            try
+            {
+                bool wantsEnabled = IsAutoStartEnabled;
+                bool isEnabled = _autoStartManager.IsEnabled;
+
+                if (wantsEnabled)
+                {
+                    _autoStartManager.Enable();
+                }
+                else if (isEnabled)
+                {
+                    _autoStartManager.Disable();
+                }
+            }
+            catch
+            {
+            }
         }
 
         private void SaveSettings()
@@ -528,6 +605,7 @@ namespace AntiZapretDPI.ViewModels.Windows
                 AutoUpdate = IsAutoUpdateEnabled,
                 AutoStart = IsAutoStartEnabled,
                 AutoSelectStrategy = IsAutoSelectStrategy,
+                AutoSelectPending = _autoSelectPending,
                 SelectedStrategy = SelectedStrategy,
                 PauseOnVpn = IsPauseOnVpn
             });
@@ -539,7 +617,14 @@ namespace AntiZapretDPI.ViewModels.Windows
 
         partial void OnSelectedStrategyChanged(string? value) => SaveSettings();
 
-        partial void OnIsAutoSelectStrategyChanged(bool value) => SaveSettings();
+        partial void OnIsAutoSelectStrategyChanged(bool value)
+        {
+            if (!value)
+            {
+                _autoSelectPending = false;
+            }
+            SaveSettings();
+        }
 
         partial void OnIsAutoStartEnabledChanged(bool value)
         {
