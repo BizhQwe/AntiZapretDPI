@@ -1,0 +1,43 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0-windows</TargetFramework>
+    <OutputType>Library</OutputType>
+    <EnableDefaultItems>false</EnableDefaultItems>
+    <AppendTargetFrameworkToOutputPath>false</AppendTargetFrameworkToOutputPath>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\AntiZapretDPI.Desktop\AntiZapretDPI.Desktop.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <None Include="installer.iss" />
+    <None Include="build-installer.bat" />
+  </ItemGroup>
+
+  <PropertyGroup>
+    <InstallerVersion Condition="'$(InstallerVersion)' == ''">1.0.0</InstallerVersion>
+    <RepoRoot>$(MSBuildProjectDirectory)\..\..</RepoRoot>
+    <PublishDir>$(RepoRoot)\artifacts\publish</PublishDir>
+    <DistDir>$(RepoRoot)\dist</DistDir>
+    <AppIcon>$(MSBuildProjectDirectory)\..\AntiZapretDPI.Desktop\Assets\Icons\AntiZapretDPI-Icon-Multi.ico</AppIcon>
+    <LicenseFile>$(RepoRoot)\LICENSE</LicenseFile>
+    <IsccPath Condition="'$(IsccPath)' == '' and Exists('$(ProgramFiles(x86))\Inno Setup 6\ISCC.exe')">$(ProgramFiles(x86))\Inno Setup 6\ISCC.exe</IsccPath>
+    <IsccPath Condition="'$(IsccPath)' == '' and Exists('$(ProgramFiles)\Inno Setup 6\ISCC.exe')">$(ProgramFiles)\Inno Setup 6\ISCC.exe</IsccPath>
+    <IsccPath Condition="'$(IsccPath)' == '' and Exists('$(ProgramFiles(x86))\Inno Setup 7\ISCC.exe')">$(ProgramFiles(x86))\Inno Setup 7\ISCC.exe</IsccPath>
+    <IsccPath Condition="'$(IsccPath)' == '' and Exists('$(ProgramFiles)\Inno Setup 7\ISCC.exe')">$(ProgramFiles)\Inno Setup 7\ISCC.exe</IsccPath>
+    <IsccPath Condition="'$(IsccPath)' == ''">ISCC.exe</IsccPath>
+  </PropertyGroup>
+
+  <Target Name="BuildInstaller" AfterTargets="Build" Condition="'$(Configuration)' == 'Release' and '$(BuildInstaller)' == 'true'">
+    <Message Importance="high" Text="=== AntiZapretDPI.Installer: очистка каталога публикации ===" />
+    <RemoveDir Directories="$(PublishDir)" Condition="Exists('$(PublishDir)')" />
+    <Message Importance="high" Text="=== AntiZapretDPI.Installer: публикация (self-contained single-file) ===" />
+    <Exec Command="dotnet publish &quot;$(MSBuildProjectDirectory)\..\AntiZapretDPI.Desktop\AntiZapretDPI.Desktop.csproj&quot; -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true -p:DebugType=none -p:DebugSymbols=false -o &quot;$(PublishDir)&quot;" />
+    <Message Importance="high" Text="=== AntiZapretDPI.Installer: компиляция Inno Setup ===" />
+    <Exec Command="&quot;$(IsccPath)&quot; /DSourceDir=&quot;$(PublishDir)&quot; /DAppVersion=&quot;$(InstallerVersion)&quot; /DAppIcon=&quot;$(AppIcon)&quot; /DLicenseFile=&quot;$(LicenseFile)&quot; /DSelfContained &quot;$(MSBuildProjectDirectory)\installer.iss&quot;" />
+    <Message Importance="high" Text="=== Готово: $(DistDir)\AntiZapretDPI-Setup-$(InstallerVersion).exe ===" />
+  </Target>
+
+</Project>

@@ -1,0 +1,47 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <AssemblyName>AntiZapretDPI</AssemblyName>
+    <RootNamespace>AntiZapretDPI</RootNamespace>
+    <TargetFramework>net10.0-windows</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <UseWPF>true</UseWPF>
+    <ApplicationIcon>Assets\Icons\AntiZapretDPI-Icon-Multi.ico</ApplicationIcon>
+    <ApplicationManifest>app.manifest</ApplicationManifest>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <None Remove="Assets\Icons\AntiZapretDPI-Icon-128.png" />
+    <None Remove="Assets\Icons\AntiZapretDPI-Icon-16.png" />
+    <None Remove="Assets\Icons\AntiZapretDPI-Icon-24.png" />
+    <None Remove="Assets\Icons\AntiZapretDPI-Icon-256.png" />
+    <None Remove="Assets\Icons\AntiZapretDPI-Icon-32.png" />
+    <None Remove="Assets\Icons\AntiZapretDPI-Icon-48.png" />
+    <None Remove="Assets\Icons\AntiZapretDPI-Icon-64.png" />
+    <None Remove="Assets\Icons\AntiZapretDPI-Icon-Multi.ico" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Content Include="Assets\Icons\AntiZapretDPI-Icon-Multi.ico" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="CommunityToolkit.Mvvm" Version="8.4.2" />
+    <PackageReference Include="Microsoft.Extensions.Hosting" Version="10.0.11" />
+    <PackageReference Include="WPF-UI" Version="4.3.0" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Resource Include="Assets\Icons\AntiZapretDPI-Icon-128.png" />
+    <Resource Include="Assets\Icons\AntiZapretDPI-Icon-16.png" />
+    <Resource Include="Assets\Icons\AntiZapretDPI-Icon-24.png" />
+    <Resource Include="Assets\Icons\AntiZapretDPI-Icon-256.png" />
+    <Resource Include="Assets\Icons\AntiZapretDPI-Icon-32.png" />
+    <Resource Include="Assets\Icons\AntiZapretDPI-Icon-48.png" />
+    <Resource Include="Assets\Icons\AntiZapretDPI-Icon-64.png" />
+    <Resource Include="Assets\Icons\AntiZapretDPI-Icon-Multi.ico" />
+  </ItemGroup>
+
+</Project>

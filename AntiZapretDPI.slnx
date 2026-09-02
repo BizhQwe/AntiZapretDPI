@@ -1,0 +1,4 @@
+<Solution>
+  <Project Path="src\AntiZapretDPI.Desktop\AntiZapretDPI.Desktop.csproj" />
+  <Project Path="src\AntiZapretDPI.Installer\AntiZapretDPI.Installer.csproj" />
+</Solution>

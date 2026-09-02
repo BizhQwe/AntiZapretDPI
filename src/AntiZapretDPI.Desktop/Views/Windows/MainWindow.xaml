@@ -1,0 +1,233 @@
+﻿<ui:FluentWindow x:Class="AntiZapretDPI.Views.Windows.MainWindow"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:extensions="clr-namespace:AntiZapretDPI.Helpers.Extensions"
+    xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml"
+    Title="AntiZapretDPI"
+    Width="450" Height="510"
+    MinWidth="450" MinHeight="510"
+    extensions:FluentWindowBehavior.DisableResize="True"
+    ExtendsContentIntoTitleBar="True"
+    WindowBackdropType="Mica"
+    WindowCornerPreference="Round"
+    WindowStartupLocation="CenterScreen">
+
+    <ui:FluentWindow.Resources>
+        <BooleanToVisibilityConverter x:Key="BoolToVis" />
+    </ui:FluentWindow.Resources>
+
+    <Grid>
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+            <RowDefinition Height="Auto" />
+        </Grid.RowDefinitions>
+
+        <StackPanel Grid.Row="0">
+            <ui:TitleBar Title="{Binding Title, RelativeSource={RelativeSource AncestorType=Window}}"
+                Height="40"
+                extensions:TitleBarBehavior.DisableMaximizeButton="True"
+                FontSize="14">
+                <ui:TitleBar.Icon>
+                    <ui:ImageIcon Width="24" Height="24"
+                        Margin="-8"
+                        Source="/Assets/Icons/AntiZapretDPI-Icon-24.png" />
+                </ui:TitleBar.Icon>
+            </ui:TitleBar>
+            <Separator Margin="0" />
+        </StackPanel>
+
+        <StackPanel Grid.Row="1">
+            <Grid Margin="16,14,16,8">
+                <TextBlock HorizontalAlignment="Left" Text="Панель управления" />
+                <TextBlock HorizontalAlignment="Right"
+                    Text="{Binding Version, StringFormat=Версия: {0}}"
+                    Visibility="{Binding IsVersionVisible, Converter={StaticResource BoolToVis}}" />
+            </Grid>
+
+            <Grid Margin="8,8,8,14">
+                <Grid.Resources>
+                    <Style BasedOn="{StaticResource {x:Type ui:Button}}" TargetType="ui:Button">
+                        <Setter Property="Foreground" Value="{DynamicResource TextFillColorPrimaryBrush}" />
+                        <Setter Property="Margin" Value="8,0" />
+                        <Setter Property="HorizontalAlignment" Value="Stretch" />
+                    </Style>
+                    <Style TargetType="ui:SymbolIcon">
+                        <Setter Property="FontSize" Value="16" />
+                    </Style>
+                </Grid.Resources>
+
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="*" />
+                </Grid.ColumnDefinitions>
+
+                <ui:Button Grid.Column="0"
+                    Command="{Binding MainActionCommand}"
+                    Content="{Binding MainActionText}"
+                    IsEnabled="{Binding IsMainActionEnabled}">
+                    <ui:Button.Icon>
+                        <ui:SymbolIcon Symbol="{Binding MainActionIcon}" />
+                    </ui:Button.Icon>
+                </ui:Button>
+
+                <ui:Button Grid.Column="1"
+                    Command="{Binding SecondaryActionCommand}"
+                    Content="{Binding SecondaryActionText}"
+                    IsEnabled="{Binding IsSecondaryActionEnabled}">
+                    <ui:Button.Icon>
+                        <ui:SymbolIcon Symbol="{Binding SecondaryActionIcon}" />
+                    </ui:Button.Icon>
+                </ui:Button>
+
+                <ui:Button Grid.Column="2"
+                    Command="{Binding DeleteCommand}"
+                    Content="Удалить"
+                    IsEnabled="{Binding IsDeleteButtonEnabled}">
+                    <ui:Button.Icon>
+                        <ui:SymbolIcon Symbol="Delete24" />
+                    </ui:Button.Icon>
+                </ui:Button>
+            </Grid>
+
+            <Separator Margin="0" />
+        </StackPanel>
+
+        <StackPanel Grid.Row="2">
+            <StackPanel Margin="16,14,16,16">
+                <TextBlock Margin="0,0,0,8" Text="Настройки сервиса" />
+
+                <Grid>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="Auto" />
+                    </Grid.ColumnDefinitions>
+
+                    <TextBlock Grid.Column="0"
+                        Margin="15,12"
+                        Text="Файл маршрутизации" />
+
+                    <ui:Button Grid.Column="1"
+                        Width="150"
+                        Command="{Binding EditRoutingFileCommand}"
+                        Content="Редактировать"
+                        IsEnabled="{Binding AreSettingsEnabled}">
+                        <ui:Button.Icon>
+                            <ui:SymbolIcon Symbol="DocumentEdit24" />
+                        </ui:Button.Icon>
+                    </ui:Button>
+                </Grid>
+
+                <Grid>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="Auto" />
+                    </Grid.ColumnDefinitions>
+
+                    <TextBlock Grid.Column="0"
+                        Margin="15,12"
+                        Text="Стратегия" />
+
+                    <ComboBox Grid.Column="1"
+                        Width="150" Height="32"
+                        Padding="10,5,5,5"
+                        IsEnabled="{Binding AreSettingsEnabled}"
+                        ItemsSource="{Binding Strategies}"
+                        SelectedItem="{Binding SelectedStrategy}" />
+                </Grid>
+
+                <Grid>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="Auto" />
+                    </Grid.ColumnDefinitions>
+
+                    <TextBlock Grid.Column="0"
+                        Margin="15,12"
+                        Text="Скрытый режим" />
+
+                    <ui:ToggleSwitch Grid.Column="1"
+                        IsChecked="{Binding IsHiddenMode, Mode=TwoWay}"
+                        IsEnabled="{Binding AreSettingsEnabled}"
+                        LabelPosition="Left" OffContent="Выкл"
+                        OnContent="Вкл" />
+                </Grid>
+
+                <Grid>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="Auto" />
+                    </Grid.ColumnDefinitions>
+
+                    <TextBlock Grid.Column="0"
+                        Margin="15,12,15,12"
+                        Text="Автообновление" />
+
+                    <ui:ToggleSwitch Grid.Column="1"
+                        IsChecked="{Binding IsAutoUpdateEnabled, Mode=TwoWay}"
+                        IsEnabled="{Binding AreSettingsEnabled}"
+                        LabelPosition="Left" OffContent="Выкл"
+                        OnContent="Вкл" />
+                </Grid>
+
+                <Grid>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="Auto" />
+                    </Grid.ColumnDefinitions>
+
+                    <TextBlock Grid.Column="0"
+                        Margin="15,12,15,12"
+                        Text="Автозапуск" />
+
+                    <ui:ToggleSwitch Grid.Column="1"
+                        IsChecked="{Binding IsAutoStartEnabled, Mode=TwoWay}"
+                        IsEnabled="{Binding AreSettingsEnabled}"
+                        LabelPosition="Left" OffContent="Выкл"
+                        OnContent="Вкл" />
+                </Grid>
+
+                <Grid>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="Auto" />
+                    </Grid.ColumnDefinitions>
+
+                    <TextBlock Grid.Column="0"
+                        Margin="15,12,15,12"
+                        Text="Автоподбор профиля" />
+
+                    <ui:ToggleSwitch Grid.Column="1"
+                        IsChecked="{Binding IsAutoSelectStrategy, Mode=TwoWay}"
+                        IsEnabled="{Binding AreSettingsEnabled}"
+                        LabelPosition="Left" OffContent="Выкл"
+                        OnContent="Вкл" />
+                </Grid>
+            </StackPanel>
+        </StackPanel>
+
+        <StackPanel Grid.Row="3">
+            <Separator Margin="0" />
+
+            <Grid Margin="16">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="*" />
+                </Grid.ColumnDefinitions>
+
+                <Ellipse Grid.Column="0"
+                    Width="8" Height="8"
+                    Margin="0,0,10,0"
+                    VerticalAlignment="Center"
+                    Fill="{Binding StatusColor}" />
+
+                <TextBlock Grid.Column="1"
+                    VerticalAlignment="Center"
+                    Text="{Binding StatusText}"
+                    TextTrimming="CharacterEllipsis" />
+            </Grid>
+        </StackPanel>
+    </Grid>
+</ui:FluentWindow>
