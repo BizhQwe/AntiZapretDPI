@@ -10,6 +10,7 @@ namespace AntiZapretDPI.Services
         public bool AutoStart { get; set; }
         public bool AutoSelectStrategy { get; set; }
         public string? SelectedStrategy { get; set; }
+        public bool PauseOnVpn { get; set; } = true;
     }
 
     public class AppSettingsService

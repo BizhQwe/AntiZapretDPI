@@ -2,8 +2,6 @@ namespace AntiZapretDPI.Contracts
 {
     public interface IAntiZapretManager
     {
-        string GetInstallPath();
-
         bool IsInstalled();
 
         bool IsRunning();
@@ -23,7 +21,5 @@ namespace AntiZapretDPI.Contracts
         void StopZapret();
 
         bool DeleteInstallation();
-
-        Task<bool> IsAccessRestoredAsync();
     }
 }

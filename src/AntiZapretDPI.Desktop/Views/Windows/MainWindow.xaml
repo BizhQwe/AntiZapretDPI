@@ -4,8 +4,8 @@
     xmlns:extensions="clr-namespace:AntiZapretDPI.Helpers.Extensions"
     xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml"
     Title="AntiZapretDPI"
-    Width="450" Height="510"
-    MinWidth="450" MinHeight="510"
+    Width="450" Height="570"
+    MinWidth="450" MinHeight="570"
     extensions:FluentWindowBehavior.DisableResize="True"
     ExtendsContentIntoTitleBar="True"
     WindowBackdropType="Mica"
@@ -201,6 +201,23 @@
 
                     <ui:ToggleSwitch Grid.Column="1"
                         IsChecked="{Binding IsAutoSelectStrategy, Mode=TwoWay}"
+                        IsEnabled="{Binding AreSettingsEnabled}"
+                        LabelPosition="Left" OffContent="Выкл"
+                        OnContent="Вкл" />
+                </Grid>
+
+                <Grid>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="Auto" />
+                    </Grid.ColumnDefinitions>
+
+                    <TextBlock Grid.Column="0"
+                        Margin="15,12,15,12"
+                        Text="Пауза при VPN" />
+
+                    <ui:ToggleSwitch Grid.Column="1"
+                        IsChecked="{Binding IsPauseOnVpn, Mode=TwoWay}"
                         IsEnabled="{Binding AreSettingsEnabled}"
                         LabelPosition="Left" OffContent="Выкл"
                         OnContent="Вкл" />

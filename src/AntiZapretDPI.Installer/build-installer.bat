@@ -5,7 +5,7 @@ rem =====================================================================
 rem  AntiZapretDPI installer build script (Inno Setup)
 rem
 rem  Usage:
-rem    build-installer.bat                 -> version 1.0.0, self-contained single-file
+rem    build-installer.bat                 -> version 1.0.1, self-contained single-file
 rem    build-installer.bat 1.2.0           -> custom version
 rem
 rem  Requires:
@@ -14,7 +14,7 @@ rem    - Inno Setup 6+ (ISCC.exe in PATH or Program Files)
 rem =====================================================================
 
 set "VERSION=%~1"
-if "%VERSION%"=="" set "VERSION=1.0.0"
+if "%VERSION%"=="" set "VERSION=1.0.1"
 
 set "ROOT=%~dp0..\.."
 for %%i in ("%ROOT%") do set "ROOT=%%~fi"

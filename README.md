@@ -2,22 +2,35 @@
 
 Удобная WPF-оболочка для [zapret-discord-youtube](https://github.com/Flowseal/zapret-discord-youtube). Приложение автоматизирует скачивание, установку и управление профилями утилиты `zapret`, обеспечивая быстрое восстановление доступа к заблокированным сервисам (YouTube, Discord и др.) в нативном интерфейсе Windows.
 
+Версия: **1.0.1** | Платформа: **Windows 10/11 x64** | Требуется **.NET 10**
+
 ## Возможности
 
 - **Управление в один клик:** установка и обновление компонентов `zapret`.
-- **Гибкий запуск:** включение/остановка службы с возможностью выбора профиля или режима автоподбора параметров.
+- **Гибкий запуск:** включение/остановка службы с выбором профиля (`general.bat`, `discord.bat` и др.) либо режимом автоподбора параметров.
+- **Автоподбор стратегии:** при запуске программа проверяет доступность YouTube и сама подбирает рабочий профиль; результат запоминается в настройках.
+- **Проверка доступности:** контроль фактического восстановления доступа (зонд YouTube) с отображением текущего состояния.
 - **Интеграция с системой:** настройка автозапуска при входе в Windows (через Планировщик задач).
-- **Продвинутая настройка:** встроенный редактор маршрутов (`list-general.txt`) и функция корректного удаления сервиса из системы.
+- **Пауза при VPN:** фоновый процесс-наблюдатель (`--vpnwatch`) отслеживает активные VPN-туннели, временно останавливает `winws` и автоматически возобновляет его после отключения VPN. Работает и при закрытой программе; в интерфейсе это отражается только статусом — состояние службы при этом не меняется.
+- **Продвинутая настройка:** встроенный редактор маршрутов (`list-general.txt`) и корректное удаление службы из системы.
+- **Скрытый режим:** запуск `winws` без видимого окна консоли.
 
 ## Структура проекта
 
 ```text
+AntiZapretDPI.slnx                 # Решение для .NET 10
+dist/                              # Готовые установочные файлы (результат сборки)
 src/
-  AntiZapretDPI.Desktop.slnx     # WPF-приложение
-  AntiZapretDPI.Desktop/         # Исходный код GUI
-  AntiZapretDPI.Installer.slnx   # Сборка установщика
-  AntiZapretDPI.Installer/       # Скрипты Inno Setup (installer.iss, build-installer.bat)
-dist/                            # Готовые установочные файлы (результат сборки)
+  AntiZapretDPI.Desktop/           # Исходный код WPF-приложения
+    Contracts/                     # Абстракции: менеджер, машина состояний, VPN-детектор и т.д.
+    Services/                      # Реализации: AntiZapretManager, ConnectivityProbe,
+                                   #   StrategyAutoSelector, AutoStartManager, VpnDetector,
+                                   #   VpnPauseWatcher/Coordinator, AppSettingsService
+    Services/StateMachine/         # Конечный автомат состояний (NotInstalled/Idle/Running/Busy)
+    ViewModels/Windows/            # MainViewModel
+    Views/Windows/                 # MainWindow (XAML + code-behind)
+    Helpers/                       # Утилиты и attached-behaviors
+  AntiZapretDPI.Installer/         # Сборка установщика (installer.iss, build-installer.bat)
 ```
 
 ## Сборка
@@ -26,11 +39,13 @@ dist/                            # Готовые установочные фа�
 
 ```powershell
 # Сборка WPF-приложения
-dotnet build src\AntiZapretDPI.Desktop.slnx -c Release
+dotnet build AntiZapretDPI.slnx -c Release
 
-# Сборка установщика с указанием версии
-dotnet build src\AntiZapretDPI.Installer.slnx -c Release -p:InstallerVersion=1.0.0
+# Сборка установщика с указанием версии (Inno Setup в PATH или Program Files)
+src\AntiZapretDPI.Installer\build-installer.bat 1.0.1
 ```
+
+Готовый установщик появится в `dist\AntiZapretDPI-Setup-1.0.1.exe`.
 
 ## Тихая установка и удаление
 
@@ -38,10 +53,19 @@ dotnet build src\AntiZapretDPI.Installer.slnx -c Release -p:InstallerVersion=1.0
 
 ```powershell
 # Установка
-AntiZapretDPI-Setup-1.0.0.exe /VERYSILENT /SUPPRESSMSGBOXES /NORESTART
+AntiZapretDPI-Setup-1.0.1.exe /VERYSILENT /SUPPRESSMSGBOXES /NORESTART
 
 # Удаление
 "C:\Program Files\AntiZapretDPI\Uninstall.exe" /VERYSILENT /SUPPRESSMSGBOXES
+```
+
+## Запуск из командной строки
+
+```text
+AntiZapretDPI.exe                 # обычный запуск с графическим интерфейсом
+AntiZapretDPI.exe --autostart     # запустить службу и выйти (без окна); используется
+                                  #   планировщиком задач при входе в Windows
+AntiZapretDPI.exe --vpnwatch       # режим фонового наблюдателя паузы при VPN (без окна)
 ```
 
 ## Благодарности

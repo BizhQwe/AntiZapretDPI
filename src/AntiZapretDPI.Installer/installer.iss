@@ -30,7 +30,7 @@
   #define SourceDir "..\..\artifacts\publish"
 #endif
 #ifndef AppVersion
-  #define AppVersion "1.0.0"
+  #define AppVersion "1.0.1"
 #endif
 #ifndef AppIcon
   #define AppIcon "..\AntiZapretDPI.Desktop\Assets\Icons\AntiZapretDPI-Icon-Multi.ico"
@@ -57,8 +57,8 @@ OutputBaseFilename=AntiZapretDPI-Setup-{#MyAppVersion}
 Compression=lzma2/max
 SolidCompression=yes
 PrivilegesRequired=admin
-ArchitecturesAllowed=x64
-ArchitecturesInstallIn64BitMode=x64
+ArchitecturesAllowed=x64os
+ArchitecturesInstallIn64BitMode=x64os
 SetupIconFile={#AppIcon}
 UninstallDisplayIcon={app}\{#MyAppExe}
 UninstallDisplayName={#MyAppName}

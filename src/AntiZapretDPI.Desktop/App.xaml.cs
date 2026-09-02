@@ -26,7 +26,12 @@ namespace AntiZapretDPI
         private static void ConfigureServices(IServiceCollection services)
         {
             services.AddSingleton<IAntiZapretManager, AntiZapretManager>();
+            services.AddSingleton<IConnectivityProbe, ConnectivityProbe>();
+            services.AddSingleton<IStrategyAutoSelector, StrategyAutoSelector>();
             services.AddSingleton<IAutoStartManager, AutoStartManager>();
+            services.AddSingleton<IVpnDetector, VpnDetector>();
+            services.AddSingleton<IVpnPauseCoordinator, VpnPauseCoordinator>();
+            services.AddSingleton<VpnPauseWatcher>();
             services.AddSingleton<AppSettingsService>();
             services.AddSingleton<IAppState, NotInstalledState>();
             services.AddSingleton<IAppState, IdleState>();
@@ -40,27 +45,78 @@ namespace AntiZapretDPI
 
         protected override async void OnStartup(StartupEventArgs e)
         {
+            if (e.Args.Contains("--vpnwatch", StringComparer.OrdinalIgnoreCase))
+            {
+                await RunVpnWatchAsync();
+                Shutdown();
+                return;
+            }
+
             if (e.Args.Contains("--autostart", StringComparer.OrdinalIgnoreCase))
             {
-                StartServiceOnly();
+                await StartServiceOnlyAsync();
+                Shutdown();
                 return;
             }
 
             await _host.StartAsync();
-
             _host.Services.GetRequiredService<MainWindow>().Show();
 
             base.OnStartup(e);
         }
 
-        private void StartServiceOnly()
+        private async Task RunVpnWatchAsync()
         {
-            var settings = _host.Services.GetRequiredService<AppSettingsService>().Load();
+            var watcher = _host.Services.GetRequiredService<VpnPauseWatcher>();
+            await watcher.RunAsync();
+        }
+
+        private async Task StartServiceOnlyAsync()
+        {
+            var settingsService = _host.Services.GetRequiredService<AppSettingsService>();
+            var settings = settingsService.Load();
             var manager = _host.Services.GetRequiredService<IAntiZapretManager>();
 
-            manager.StartZapret(out _, settings.SelectedStrategy ?? "general.bat", settings.HiddenMode);
+            string? startedProfile = settings.AutoSelectStrategy
+                ? await AutoSelectProfileAsync(settings, settingsService)
+                : null;
 
-            Shutdown();
+            bool started = startedProfile != null;
+            if (!started)
+            {
+                started = manager.StartZapret(out _, settings.SelectedStrategy ?? "general.bat", settings.HiddenMode);
+            }
+
+            if (started)
+            {
+                _host.Services.GetRequiredService<IVpnPauseCoordinator>().EnsureStarted();
+            }
+        }
+
+        private async Task<string?> AutoSelectProfileAsync(AppSettings settings, AppSettingsService settingsService)
+        {
+            var manager = _host.Services.GetRequiredService<IAntiZapretManager>();
+            var selector = _host.Services.GetRequiredService<IStrategyAutoSelector>();
+
+            var profiles = manager.GetAvailablePresets();
+            if (profiles.Count == 0)
+            {
+                return null;
+            }
+
+            var outcome = await selector.TrySelectAsync(
+                profiles,
+                settings.SelectedStrategy ?? "general.bat",
+                settings.HiddenMode);
+
+            if (!outcome.IsSuccess)
+            {
+                return null;
+            }
+
+            settings.SelectedStrategy = outcome.Profile;
+            settingsService.Save(settings);
+            return outcome.Profile;
         }
 
         protected override async void OnExit(ExitEventArgs e)

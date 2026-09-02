@@ -1,4 +1,4 @@
-namespace AntiZapretDPI.Services.StateMachine
+namespace AntiZapretDPI.Contracts
 {
     public abstract class AppAction
     {

@@ -1,3 +1,5 @@
+using AntiZapretDPI.Contracts;
+
 namespace AntiZapretDPI.Services.StateMachine.States
 {
     public class NotInstalledState : AppStateBase

@@ -11,24 +11,6 @@ using AntiZapretDPI.Contracts;
 
 namespace AntiZapretDPI.Services
 {
-    public class GithubRelease
-    {
-        [JsonPropertyName("tag_name")]
-        public string TagName { get; set; } = string.Empty;
-
-        [JsonPropertyName("assets")]
-        public List<GithubAsset> Assets { get; set; } = new();
-    }
-
-    public class GithubAsset
-    {
-        [JsonPropertyName("name")]
-        public string Name { get; set; } = string.Empty;
-
-        [JsonPropertyName("browser_download_url")]
-        public string BrowserDownloadUrl { get; set; } = string.Empty;
-    }
-
     public class AntiZapretManager : IAntiZapretManager
     {
         private const string ReleaseUrl = "https://api.github.com/repos/Flowseal/zapret-discord-youtube/releases/latest";
@@ -42,14 +24,14 @@ namespace AntiZapretDPI.Services
 
         private static readonly string ErrorLogFile = Path.Combine(RootFolder, "winws_error.log");
 
+        private const int MoveFileDelayUntilReboot = 0x4;
+
         private static readonly HttpClient _httpClient = new()
         {
             DefaultRequestHeaders = { { "User-Agent", "AntiZapretDPI" } }
         };
 
         private Process? _runningProcess;
-
-        public string GetInstallPath() => RootFolder;
 
         public bool IsInstalled()
         {
@@ -211,46 +193,6 @@ namespace AntiZapretDPI.Services
             }
         }
 
-        public async Task<bool> IsAccessRestoredAsync()
-        {
-            return await TryReachDiscordAsync() || await TryReachYouTubeAsync();
-        }
-
-        private static async Task<bool> TryReachDiscordAsync()
-        {
-            try
-            {
-                using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(5));
-                using var request = new HttpRequestMessage(HttpMethod.Get, "https://discord.com/api/v10/gateway");
-                using var response = await _httpClient.SendAsync(request, cts.Token);
-                if (!response.IsSuccessStatusCode)
-                {
-                    return false;
-                }
-                var body = await response.Content.ReadAsStringAsync(cts.Token);
-                return body.Contains("gateway.discord.gg", StringComparison.OrdinalIgnoreCase);
-            }
-            catch
-            {
-                return false;
-            }
-        }
-
-        private static async Task<bool> TryReachYouTubeAsync()
-        {
-            try
-            {
-                using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(5));
-                using var request = new HttpRequestMessage(HttpMethod.Get, "https://www.youtube.com/generate_204");
-                using var response = await _httpClient.SendAsync(request, cts.Token);
-                return (int)response.StatusCode == 204;
-            }
-            catch
-            {
-                return false;
-            }
-        }
-
         public bool StartZapret(out string errorDetails, string presetName = "general.bat", bool hiddenMode = true)
         {
             errorDetails = string.Empty;
@@ -355,7 +297,7 @@ namespace AntiZapretDPI.Services
             catch { }
         }
 
-        private static void RemoveWinDivertServices()
+        private void RemoveWinDivertServices()
         {
             foreach (var name in new[] { "WinDivert14", "WinDivert" })
             {
@@ -381,19 +323,17 @@ namespace AntiZapretDPI.Services
         {
             foreach (var dir in Directory.GetDirectories(root, "*", SearchOption.AllDirectories))
             {
-                MoveFileEx(dir, null, MOVEFILE_DELAY_UNTIL_REBOOT);
+                MoveFileEx(dir, null, MoveFileDelayUntilReboot);
             }
             foreach (var file in Directory.GetFiles(root, "*", SearchOption.AllDirectories))
             {
-                MoveFileEx(file, null, MOVEFILE_DELAY_UNTIL_REBOOT);
+                MoveFileEx(file, null, MoveFileDelayUntilReboot);
             }
-            MoveFileEx(root, null, MOVEFILE_DELAY_UNTIL_REBOOT);
+            MoveFileEx(root, null, MoveFileDelayUntilReboot);
         }
 
         [DllImport("kernel32.dll", SetLastError = true, CharSet = CharSet.Unicode)]
         private static extern bool MoveFileEx(string lpExistingFileName, string? lpNewFileName, int dwFlags);
-
-        private const int MOVEFILE_DELAY_UNTIL_REBOOT = 0x4;
 
         private static string DescribeStartError(Exception ex, string file)
         {
@@ -521,6 +461,24 @@ namespace AntiZapretDPI.Services
             {
                 return fallback;
             }
+        }
+
+        private sealed class GithubRelease
+        {
+            [JsonPropertyName("tag_name")]
+            public string TagName { get; set; } = string.Empty;
+
+            [JsonPropertyName("assets")]
+            public List<GithubAsset> Assets { get; set; } = new();
+        }
+
+        private sealed class GithubAsset
+        {
+            [JsonPropertyName("name")]
+            public string Name { get; set; } = string.Empty;
+
+            [JsonPropertyName("browser_download_url")]
+            public string BrowserDownloadUrl { get; set; } = string.Empty;
         }
     }
 }

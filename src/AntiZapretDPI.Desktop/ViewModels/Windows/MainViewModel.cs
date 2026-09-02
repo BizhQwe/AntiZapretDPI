@@ -1,4 +1,5 @@
 ﻿using AntiZapretDPI.Contracts;
+using AntiZapretDPI.Helpers;
 using AntiZapretDPI.Services;
 using AntiZapretDPI.Services.StateMachine;
 using AntiZapretDPI.Services.StateMachine.States;
@@ -19,11 +20,21 @@ namespace AntiZapretDPI.ViewModels.Windows
 {
     public partial class MainViewModel : ObservableObject
     {
+        private const int StateSyncIntervalMs = 2000;
+
         private readonly IAntiZapretManager _manager;
+        private readonly IConnectivityProbe _probe;
+        private readonly IStrategyAutoSelector _autoSelector;
         private readonly IAppStateMachine _machine;
         private readonly AppSettingsService _settingsService;
         private readonly IAutoStartManager _autoStartManager;
+        private readonly IVpnPauseCoordinator _vpnPauseCoordinator;
+        private readonly IVpnDetector _vpnDetector;
         private readonly DispatcherTimer _stateSyncTimer;
+
+        private CancellationTokenSource? _autoSelectCts;
+        private bool _autoSelectActive;
+        private bool _isVpnPaused;
 
         [ObservableProperty] private string _version = "Версия не найдена";
         [ObservableProperty] private bool _isVersionVisible = true;
@@ -53,23 +64,38 @@ namespace AntiZapretDPI.ViewModels.Windows
         [ObservableProperty] private bool _isAutoStartEnabled;
         [ObservableProperty] private bool _isAutoSelectStrategy;
 
+        [ObservableProperty] private bool _isPauseOnVpn = true;
+
         public MainViewModel(
             IAntiZapretManager manager,
+            IConnectivityProbe probe,
+            IStrategyAutoSelector autoSelector,
             IAppStateMachine machine,
             AppSettingsService settingsService,
-            IAutoStartManager autoStartManager)
+            IAutoStartManager autoStartManager,
+            IVpnPauseCoordinator vpnPauseCoordinator,
+            IVpnDetector vpnDetector)
         {
             _manager = manager;
+            _probe = probe;
+            _autoSelector = autoSelector;
             _machine = machine;
             _settingsService = settingsService;
             _autoStartManager = autoStartManager;
+            _vpnPauseCoordinator = vpnPauseCoordinator;
+            _vpnDetector = vpnDetector;
             _machine.StateChanged += OnStateChanged;
 
             LoadSettings();
             SyncWithServiceState();
             UpdateUiState();
 
-            _stateSyncTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(2) };
+            if (_machine.CurrentState is RunningState)
+            {
+                _vpnPauseCoordinator.EnsureStarted();
+            }
+
+            _stateSyncTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(StateSyncIntervalMs) };
             _stateSyncTimer.Tick += (_, _) => SyncWithServiceState();
             _stateSyncTimer.Start();
 
@@ -110,24 +136,63 @@ namespace AntiZapretDPI.ViewModels.Windows
 
             bool installed = _manager.IsInstalled();
             bool running = _manager.IsRunning();
+            bool managedByVpnPause = installed && IsPauseOnVpn && _vpnPauseCoordinator.IsRunning;
 
             if (!installed)
             {
+                _isVpnPaused = false;
                 if (_machine.CurrentState is not NotInstalledState)
                 {
                     _machine.MoveTo<NotInstalledState>();
                     StatusText = "Zapret не установлен";
                 }
+                return;
             }
-            else if (running)
+
+            if (managedByVpnPause)
             {
                 if (_machine.CurrentState is not RunningState)
                 {
                     _machine.MoveTo<RunningState>();
-                    StatusText = "Сервис уже запущен";
                 }
+
+                bool vpnActive = _vpnDetector.IsVpnActive();
+
+                if (running)
+                {
+                    if (_isVpnPaused)
+                    {
+                        StatusText = "Сервис запущен";
+                    }
+                    StatusColor = Brushes.LimeGreen;
+                    _isVpnPaused = false;
+                }
+                else
+                {
+                    StatusText = vpnActive
+                        ? "Сервис остановлен: работает VPN"
+                        : "Сервис запускается";
+                    StatusColor = Brushes.Orange;
+                    _isVpnPaused = true;
+                }
+                return;
             }
-            else if (_machine.CurrentState is not IdleState)
+
+            if (running)
+            {
+                if (_machine.CurrentState is not RunningState)
+                {
+                    _machine.MoveTo<RunningState>();
+                    StatusText = "Сервис запущен";
+                }
+                StatusColor = Brushes.LimeGreen;
+                _isVpnPaused = false;
+                return;
+            }
+
+            _isVpnPaused = false;
+            StatusColor = Brushes.Gray;
+            if (_machine.CurrentState is not IdleState)
             {
                 _machine.MoveTo<IdleState>();
                 StatusText = "Готов к работе";
@@ -150,7 +215,21 @@ namespace AntiZapretDPI.ViewModels.Windows
             bool ok;
             if (IsAutoSelectStrategy)
             {
-                ok = await TryStartWithAutoSelectAsync();
+                _autoSelectActive = true;
+                _autoSelectCts = new CancellationTokenSource();
+                UpdateUiState();
+
+                try
+                {
+                    ok = await TryAutoSelectAsync(_autoSelectCts.Token);
+                }
+                finally
+                {
+                    _autoSelectActive = false;
+                    _autoSelectCts.Dispose();
+                    _autoSelectCts = null;
+                    UpdateUiState();
+                }
             }
             else
             {
@@ -160,11 +239,62 @@ namespace AntiZapretDPI.ViewModels.Windows
             if (ok)
             {
                 _machine.MoveTo<RunningState>();
+                _vpnPauseCoordinator.EnsureStarted();
             }
             else
             {
                 _machine.MoveTo<IdleState>();
             }
+        }
+
+        [RelayCommand]
+        private void CancelAutoSelect()
+        {
+            _autoSelectCts?.Cancel();
+        }
+
+        private async Task<bool> TryAutoSelectAsync(CancellationToken ct)
+        {
+            var profiles = _manager.GetAvailablePresets();
+            if (profiles.Count == 0)
+            {
+                StatusText = "Профили не найдены";
+                return false;
+            }
+
+            var progress = new Progress<string>(message => StatusText = message);
+            var outcome = await _autoSelector.TrySelectAsync(
+                profiles,
+                SelectedStrategy ?? "general.bat",
+                IsHiddenMode,
+                progress,
+                ct);
+
+            return ApplySelectionOutcome(outcome);
+        }
+
+        private bool ApplySelectionOutcome(StrategySelectionResult outcome)
+        {
+            if (!outcome.IsSuccess)
+            {
+                StatusText = outcome.Status == StrategySelectionStatus.Cancelled
+                    ? "Подбор отменён"
+                    : "Ни один профиль не восстановил доступ";
+                return false;
+            }
+
+            SelectedStrategy = outcome.Profile;
+
+            StatusText = outcome.Status switch
+            {
+                StrategySelectionStatus.Partial =>
+                    TextHelper.Truncate($"Профиль: {outcome.Profile} (видеосерверы доступны, полное подтверждение не получено)", 105),
+                StrategySelectionStatus.UnconfirmedFallback =>
+                    TextHelper.Truncate($"Профиль: {outcome.Profile} (автопроверка не подтвердила — проверьте вручную)", 110),
+                _ => TextHelper.Truncate($"Рабочий профиль: {outcome.Profile}", 90)
+            };
+
+            return true;
         }
 
         private async Task<bool> StartSingleAsync()
@@ -174,72 +304,19 @@ namespace AntiZapretDPI.ViewModels.Windows
 
             if (!started)
             {
-                StatusText = Shorten($"Ошибка запуска: {errorDetails}", 90);
+                StatusText = TextHelper.Truncate($"Ошибка запуска: {errorDetails}", 90);
                 return false;
             }
 
             _machine.MoveTo<RunningState>();
 
-                bool access = await _manager.IsAccessRestoredAsync();
+            bool access = await _probe.IsBasicAccessRestoredAsync();
             if (_machine.CurrentState is RunningState)
             {
                 StatusText = access ? "Запущен. Доступ восстановлен" : "Запущен, но доступ не восстановлен";
             }
 
             return true;
-        }
-
-        private async Task<bool> TryStartWithAutoSelectAsync()
-        {
-            var profiles = _manager.GetAvailablePresets();
-            if (profiles.Count == 0)
-            {
-                StatusText = "Профили не найдены";
-                return false;
-            }
-
-            var preferred = SelectedStrategy ?? "general.bat";
-            var ordered = profiles
-                .OrderBy(p => !string.Equals(p, preferred, StringComparison.OrdinalIgnoreCase))
-                .ToList();
-
-            foreach (var profile in ordered)
-            {
-                StatusText = Shorten($"Пробую: {profile}", 90);
-                await Task.Delay(50);
-
-                string startError = string.Empty;
-                bool started = await Task.Run(() => _manager.StartZapret(out startError, profile, IsHiddenMode));
-                if (!started)
-                {
-                    continue;
-                }
-
-                await Task.Delay(1000);
-            bool access = await _manager.IsAccessRestoredAsync();
-                if (access)
-                {
-                    SelectedStrategy = profile;
-                    SaveSettings();
-                    StatusText = Shorten($"Рабочий профиль: {profile}", 90);
-                    return true;
-                }
-
-                await Task.Run(_manager.StopZapret);
-            }
-
-            await Task.Run(_manager.StopZapret);
-            StatusText = "Ни один профиль не восстановил доступ";
-            return false;
-        }
-
-        private static string Shorten(string text, int maxLength)
-        {
-            if (string.IsNullOrEmpty(text) || text.Length <= maxLength)
-            {
-                return text;
-            }
-            return text.Substring(0, maxLength - 3) + "...";
         }
 
         [RelayCommand]
@@ -251,7 +328,11 @@ namespace AntiZapretDPI.ViewModels.Windows
             }
 
             _machine.MoveTo<BusyState>();
-            await Task.Run(_manager.StopZapret);
+            await Task.Run(() =>
+            {
+                _vpnPauseCoordinator.EnsureStopped(5000);
+                _manager.StopZapret();
+            });
             _machine.MoveTo<IdleState>();
             StatusText = "Остановлен";
         }
@@ -274,6 +355,7 @@ namespace AntiZapretDPI.ViewModels.Windows
             }
 
             _machine.MoveTo<BusyState>();
+            await Task.Run(() => _vpnPauseCoordinator.EnsureStopped(5000));
 
             var progress = new Progress<string>(msg => StatusText = msg);
             bool success = await Task.Run(() => _manager.DownloadAndInstallAsync(progress));
@@ -319,7 +401,11 @@ namespace AntiZapretDPI.ViewModels.Windows
             }
 
             _machine.MoveTo<BusyState>();
-            bool ok = await Task.Run(_manager.DeleteInstallation);
+            bool ok = await Task.Run(() =>
+            {
+                _vpnPauseCoordinator.EnsureStopped(5000);
+                return _manager.DeleteInstallation();
+            });
             _machine.MoveTo<NotInstalledState>();
             StatusText = ok ? "Установка удалена" : "Не удалось удалить установку";
         }
@@ -345,7 +431,7 @@ namespace AntiZapretDPI.ViewModels.Windows
             }
             catch (Exception ex)
             {
-                StatusText = Shorten($"Не удалось открыть файл: {ex.Message}", 90);
+                StatusText = TextHelper.Truncate($"Не удалось открыть файл: {ex.Message}", 90);
             }
         }
 
@@ -374,7 +460,9 @@ namespace AntiZapretDPI.ViewModels.Windows
 
             Version = _manager.GetLocalVersion();
             IsVersionVisible = installed;
-            StatusColor = runningNow ? Brushes.LimeGreen : Brushes.Gray;
+            StatusColor = runningNow
+                ? Brushes.LimeGreen
+                : (running && _isVpnPaused) ? Brushes.Orange : Brushes.Gray;
 
             MainActionText = running ? "Остановить" : "Запустить";
             MainActionCommand = running ? StopCommand : StartCommand;
@@ -389,6 +477,16 @@ namespace AntiZapretDPI.ViewModels.Windows
             IsDeleteButtonEnabled = idle && !busy;
 
             AreSettingsEnabled = installed && !running && !runningNow && !busy;
+
+            if (busy && _autoSelectActive)
+            {
+                MainActionText = "Отменить";
+                MainActionCommand = CancelAutoSelectCommand;
+                MainActionIcon = SymbolRegular.Dismiss24;
+                IsMainActionEnabled = true;
+                StatusColor = Brushes.Orange;
+                return;
+            }
 
             if (busy)
             {
@@ -418,6 +516,7 @@ namespace AntiZapretDPI.ViewModels.Windows
             IsAutoUpdateEnabled = settings.AutoUpdate;
             IsAutoStartEnabled = settings.AutoStart;
             IsAutoSelectStrategy = settings.AutoSelectStrategy;
+            IsPauseOnVpn = settings.PauseOnVpn;
             SelectedStrategy = settings.SelectedStrategy;
         }
 
@@ -429,7 +528,8 @@ namespace AntiZapretDPI.ViewModels.Windows
                 AutoUpdate = IsAutoUpdateEnabled,
                 AutoStart = IsAutoStartEnabled,
                 AutoSelectStrategy = IsAutoSelectStrategy,
-                SelectedStrategy = SelectedStrategy
+                SelectedStrategy = SelectedStrategy,
+                PauseOnVpn = IsPauseOnVpn
             });
         }
 
@@ -452,6 +552,23 @@ namespace AntiZapretDPI.ViewModels.Windows
             else
             {
                 _autoStartManager.Disable();
+            }
+        }
+
+        partial void OnIsPauseOnVpnChanged(bool value)
+        {
+            SaveSettings();
+
+            if (value)
+            {
+                if (_manager.IsRunning())
+                {
+                    _vpnPauseCoordinator.EnsureStarted();
+                }
+            }
+            else
+            {
+                _vpnPauseCoordinator.EnsureStopped();
             }
         }
     }
